@@ -1,7 +1,7 @@
 #include "UEnodeTweaksModule.h"
 #include "MultiConnectPreprocessor.h"
 
-#include "Application/SlateApplication.h"
+#include "Framework/Application/SlateApplication.h"
 #include "Modules/ModuleManager.h"
 
 void FUEnodeTweaksModule::StartupModule()
