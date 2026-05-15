@@ -1,5 +1,4 @@
 using UnrealBuildTool;
-using System.IO;
 
 public class UEnodeTweaks : ModuleRules
 {
@@ -21,11 +20,7 @@ public class UEnodeTweaks : ModuleRules
             "UnrealEd",
             "GraphEditor",
             "BlueprintGraph",
-            "EditorSubsystem",
             "InputCore",
         });
-
-        // Access FDragConnection from GraphEditor's private headers
-        PrivateIncludePaths.Add(Path.Combine(EngineDirectory, "Source/Editor/GraphEditor/Private"));
     }
 }
