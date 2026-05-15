@@ -1,8 +1,7 @@
 #include "MultiConnectPreprocessor.h"
 
-#include "Application/SlateApplication.h"
+#include "Framework/Application/SlateApplication.h"
 #include "DragConnection.h"          // GraphEditor/Private — gives us FDragConnection
-#include "Framework/Application/IInputProcessor.h"
 #include "Input/Events.h"
 #include "Widgets/SWindow.h"
 
@@ -44,7 +43,7 @@ void FMultiConnectPreprocessor::Tick(const float DeltaTime, FSlateApplication& S
     );
 
     FPointerEvent SyntheticDown(
-        FSlateApplicationBase::CursorPointerIndex,
+        0, // CursorPointerIndex
         SourcePinScreenPos,
         SourcePinScreenPos,
         TSet<FKey>(),
@@ -62,7 +61,7 @@ bool FMultiConnectPreprocessor::HandleMouseButtonDownEvent(FSlateApplication& Sl
     {
         // Always record where each drag might start; we only act on this if
         // the drop later turns out to be a CTRL-held pin connection drop.
-        SourcePinScreenPos = MouseEvent.GetScreenSpacePosition();
+        SourcePinScreenPos = FVector2f(MouseEvent.GetScreenSpacePosition());
 
         if (const FWidgetPath* Path = MouseEvent.GetEventPath())
         {

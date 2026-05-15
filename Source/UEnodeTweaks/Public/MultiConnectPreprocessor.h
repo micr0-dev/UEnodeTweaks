@@ -1,8 +1,9 @@
 #pragma once
 
-#include "IInputProcessor.h"
+#include "Framework/Application/IInputProcessor.h"
 #include "InputCoreTypes.h"
 #include "Math/Vector2D.h"
+#include "Widgets/SWindow.h"
 
 /**
  * Slate input preprocessor that implements CTRL-held multi-connect for Blueprint pin wires.
@@ -24,8 +25,9 @@ private:
     // Set to true when we want to re-initiate a pin drag on the next tick
     bool bPendingReconnect = false;
 
-    // Screen-space position of the source pin (recorded at mouse-down)
-    FVector2D SourcePinScreenPos = FVector2D::ZeroVector;
+    // Screen-space position of the source pin (recorded at mouse-down).
+    // Slate uses float-precision positions (FVector2f) in UE 5.3+.
+    FVector2f SourcePinScreenPos = FVector2f::ZeroVector;
 
     // The Slate window that hosted the drag (for routing the synthetic event)
     TWeakPtr<SWindow> SourceWindowWeak;
