@@ -8,10 +8,9 @@
 /**
  * Slate input preprocessor that implements CTRL-held multi-connect for Blueprint pin wires.
  *
- * When the user releases a pin connection drag while holding CTRL, a synthetic
- * mouse-down is replayed at the source pin's screen position on the next tick,
- * effectively re-initiating the drag from the same output pin so they can
- * connect it to multiple inputs in succession. Releasing CTRL ends the mode.
+ * When the user releases a pin-connection drag while holding CTRL, the drag is
+ * re-initiated from the same source pin on the next tick so they can connect one
+ * output pin to many inputs in succession. Releasing CTRL ends the mode.
  */
 class FMultiConnectPreprocessor : public IInputProcessor
 {
@@ -22,12 +21,14 @@ public:
     virtual bool HandleKeyUpEvent(FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent) override;
 
 private:
-    // Set to true when we want to re-initiate a pin drag on the next tick
+    // True when a re-initiation of the source-pin drag should fire on the next tick
     bool bPendingReconnect = false;
 
-    // Screen-space position of the source pin (recorded at mouse-down).
-    // Slate uses float-precision positions (FVector2f) in UE 5.3+.
-    FVector2f SourcePinScreenPos = FVector2f::ZeroVector;
+    // True when the last left-mouse-down landed on a graph pin widget
+    bool bDownOnPin = false;
+
+    // Screen-space position of the source pin (recorded at mouse-down)
+    FVector2D SourcePinScreenPos = FVector2D::ZeroVector;
 
     // The Slate window that hosted the drag (for routing the synthetic event)
     TWeakPtr<SWindow> SourceWindowWeak;

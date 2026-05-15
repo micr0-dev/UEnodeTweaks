@@ -1,9 +1,34 @@
 #include "MultiConnectPreprocessor.h"
 
 #include "Framework/Application/SlateApplication.h"
-#include "DragConnection.h"          // GraphEditor/Private — gives us FDragConnection
+#include "GraphEditorDragDropAction.h"   // Public GraphEditor header; covers all graph drag ops
 #include "Input/Events.h"
+#include "Layout/WidgetPath.h"
 #include "Widgets/SWindow.h"
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+/** Returns true if any widget in the path has a type name containing "GraphPin".
+ *  All SGraphPin subclasses (SBlueprintGraphPin_Bool, SGraphPinVector, etc.)
+ *  match this pattern, letting us distinguish pin drags from node-body drags
+ *  without needing private engine headers. */
+static bool PathContainsGraphPin(const FWidgetPath& Path)
+{
+    for (int32 i = 0; i < Path.Widgets.Num(); ++i)
+    {
+        if (Path.Widgets[i].Widget->GetType().ToString().Contains(TEXT("GraphPin")))
+        {
+            return true;
+        }
+    }
+    return false;
+}
+
+// ---------------------------------------------------------------------------
+// IInputProcessor interface
+// ---------------------------------------------------------------------------
 
 void FMultiConnectPreprocessor::Tick(const float DeltaTime, FSlateApplication& SlateApp, TSharedRef<ICursor> Cursor)
 {
@@ -14,7 +39,7 @@ void FMultiConnectPreprocessor::Tick(const float DeltaTime, FSlateApplication& S
 
     bPendingReconnect = false;
 
-    // If the user released CTRL between the drop and this tick, do nothing.
+    // If the user released CTRL between the drop and this tick, bail out.
     if (!SlateApp.GetModifierKeys().IsControlDown())
     {
         return;
@@ -26,53 +51,36 @@ void FMultiConnectPreprocessor::Tick(const float DeltaTime, FSlateApplication& S
         return;
     }
 
-    // Replay a left-mouse-down at the exact screen position of the source pin.
-    // Slate will route it through the widget tree to the SGraphPin sitting there,
-    // which responds with FReply::BeginDragDrop(FDragConnection::New(...)) —
-    // starting a fresh wire drag from the same output pin.
-    FModifierKeysState CtrlHeld(
-        /*bInIsLeftShiftDown*/   false,
-        /*bInIsRightShiftDown*/  false,
-        /*bInIsLeftControlDown*/ true,
-        /*bInIsRightControlDown*/false,
-        /*bInIsLeftAltDown*/     false,
-        /*bInIsRightAltDown*/    false,
-        /*bInIsLeftCommandDown*/ false,
-        /*bInIsRightCommandDown*/false,
-        /*bInAreCapsLocked*/     false
-    );
-
-    FPointerEvent SyntheticDown(
-        0, // CursorPointerIndex
-        SourcePinScreenPos,
-        SourcePinScreenPos,
-        TSet<FKey>(),
-        EKeys::LeftMouseButton,
-        /*WheelDelta*/ 0.0f,
-        CtrlHeld
-    );
-
-    SlateApp.ProcessMouseButtonDownEvent(Window->GetNativeWindow(), SyntheticDown);
+    // Re-initiate the drag by posting a left-mouse-down at the source pin's
+    // screen position. FSlateApplication::OnMouseDown routes the event through
+    // the widget tree; the SGraphPin sitting at that position responds with
+    // FReply::BeginDragDrop(FDragConnection::New(...)), starting a fresh wire.
+    //
+    // CTRL is physically held by the user so the modifier state is read
+    // correctly from the platform — no need to construct FPointerEvent manually.
+    SlateApp.OnMouseDown(Window->GetNativeWindow(), EMouseButtons::Left, SourcePinScreenPos);
 }
 
 bool FMultiConnectPreprocessor::HandleMouseButtonDownEvent(FSlateApplication& SlateApp, const FPointerEvent& MouseEvent)
 {
-    if (MouseEvent.GetEffectingButton() == EKeys::LeftMouseButton)
+    if (MouseEvent.GetEffectingButton() != EKeys::LeftMouseButton)
     {
-        // Always record where each drag might start; we only act on this if
-        // the drop later turns out to be a CTRL-held pin connection drop.
-        SourcePinScreenPos = FVector2f(MouseEvent.GetScreenSpacePosition());
+        return false;
+    }
 
-        if (const FWidgetPath* Path = MouseEvent.GetEventPath())
+    SourcePinScreenPos = MouseEvent.GetScreenSpacePosition();
+    bDownOnPin = false;
+
+    if (const FWidgetPath* Path = MouseEvent.GetEventPath())
+    {
+        if (Path->IsValid())
         {
-            if (Path->IsValid())
-            {
-                SourceWindowWeak = Path->GetWindow();
-            }
+            SourceWindowWeak = Path->GetWindow();
+            bDownOnPin = PathContainsGraphPin(*Path);
         }
     }
 
-    return false; // Never consume mouse-down
+    return false; // Never consume
 }
 
 bool FMultiConnectPreprocessor::HandleMouseButtonUpEvent(FSlateApplication& SlateApp, const FPointerEvent& MouseEvent)
@@ -82,20 +90,21 @@ bool FMultiConnectPreprocessor::HandleMouseButtonUpEvent(FSlateApplication& Slat
         return false;
     }
 
-    if (!MouseEvent.IsControlDown())
+    if (!MouseEvent.IsControlDown() || !bDownOnPin)
     {
         return false;
     }
 
-    // Only re-initiate if the active drag op is a pin-wire connection drag.
-    // FDragNode (node body movement) is excluded because it does not match FDragConnection.
+    // Only re-initiate when the completed drag was a graph-editor drag op
+    // (FDragConnection for pin wires; FDragNode for node bodies is excluded
+    //  because bDownOnPin will be false for node-header clicks).
     TSharedPtr<FDragDropOperation> DragOp = SlateApp.GetDragDropContent();
-    if (DragOp.IsValid() && DragOp->IsOfType<FDragConnection>())
+    if (DragOp.IsValid() && DragOp->IsOfType<FGraphEditorDragDropAction>())
     {
         bPendingReconnect = true;
     }
 
-    return false; // Never consume mouse-up — let the normal drop/connection logic run first
+    return false; // Never consume — let the normal drop/connection logic run first
 }
 
 bool FMultiConnectPreprocessor::HandleKeyUpEvent(FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent)
@@ -106,5 +115,5 @@ bool FMultiConnectPreprocessor::HandleKeyUpEvent(FSlateApplication& SlateApp, co
         bPendingReconnect = false;
     }
 
-    return false; // Never consume key events
+    return false; // Never consume
 }
