@@ -1,6 +1,6 @@
 /home/micr0/Documents/Unreal\ Projects/PluginDev/Plugins/UEnodeTweaks/Intermediate/Build/Linux/x64/UnrealEditor/Development/UEnodeTweaks/UEnodeTweaks.cpp.o: \
-  /home/micr0/Documents/Unreal\ Projects/PluginDev/Intermediate/Build/Linux/x64/PluginDevEditor/Development/Engine/SharedPCH.Engine.Cpp20.h \
-  /home/micr0/Documents/Unreal\ Projects/PluginDev/Intermediate/Build/Linux/x64/PluginDevEditor/Development/Engine/SharedDefinitions.Engine.Cpp20.h \
+  /home/micr0/Documents/Unreal\ Projects/PluginDev/Intermediate/Build/Linux/x64/PluginDevEditor/Development/Engine/SharedPCH.Engine.Project.ValApi.Cpp20.h \
+  /home/micr0/Documents/Unreal\ Projects/PluginDev/Intermediate/Build/Linux/x64/PluginDevEditor/Development/Engine/SharedDefinitions.Engine.Project.ValApi.Cpp20.h \
   /home/micr0/UnrealEngine5.4.4/Engine/Source/Runtime/Engine/Public/EngineSharedPCH.h \
   /home/micr0/UnrealEngine5.4.4/Engine/Source/Runtime/Slate/Public/SlateSharedPCH.h \
   /home/micr0/UnrealEngine5.4.4/Engine/Source/Runtime/CoreUObject/Public/CoreUObjectSharedPCH.h \
@@ -2471,7 +2471,4 @@
   /home/micr0/UnrealEngine5.4.4/Engine/Source/ThirdParty/Unix/LibCxx/include/c++/v1/__algorithm/shift_right.h \
   /home/micr0/UnrealEngine5.4.4/Engine/Source/ThirdParty/Unix/LibCxx/include/c++/v1/__algorithm/transform.h \
   /home/micr0/Documents/Unreal\ Projects/PluginDev/Plugins/UEnodeTweaks/Source/UEnodeTweaks/Private/UEnodeTweaks.cpp \
-  /home/micr0/Documents/Unreal\ Projects/PluginDev/Plugins/UEnodeTweaks/Intermediate/Build/Linux/x64/UnrealEditor/Development/UEnodeTweaks/Definitions.UEnodeTweaks.h \
-  /home/micr0/Documents/Unreal\ Projects/PluginDev/Plugins/UEnodeTweaks/Source/UEnodeTweaks/Public/UEnodeTweaks.h \
-  Runtime/Core/Public/CoreMinimal.h \
-  Runtime/Core/Public/Modules/ModuleManager.h
+  /home/micr0/Documents/Unreal\ Projects/PluginDev/Plugins/UEnodeTweaks/Intermediate/Build/Linux/x64/UnrealEditor/Development/UEnodeTweaks/Definitions.UEnodeTweaks.h

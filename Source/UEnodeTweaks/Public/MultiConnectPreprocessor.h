@@ -1,17 +1,15 @@
 #pragma once
 
 #include "Framework/Application/IInputProcessor.h"
-#include "InputCoreTypes.h"
+#include "EdGraph/EdGraphPin.h"         // FEdGraphPinReference (safe weak-ref to UEdGraphPin)
 #include "Math/Vector2D.h"
-#include "Widgets/SWindow.h"
+#include "Templates/SharedPointer.h"
+#include "UObject/WeakObjectPtrTemplates.h"
 
-/**
- * Slate input preprocessor that implements CTRL-held multi-connect for Blueprint pin wires.
- *
- * When the user releases a pin-connection drag while holding CTRL, the drag is
- * re-initiated from the same source pin on the next tick so they can connect one
- * output pin to many inputs in succession. Releasing CTRL ends the mode.
- */
+class SWindow;
+class SGraphPanel;
+class UK2Node_ExecutionSequence;
+
 class FMultiConnectPreprocessor : public IInputProcessor
 {
 public:
@@ -21,15 +19,23 @@ public:
     virtual bool HandleKeyUpEvent(FSlateApplication& SlateApp, const FKeyEvent& InKeyEvent) override;
 
 private:
-    // True when a re-initiation of the source-pin drag should fire on the next tick
+    void SynthesizeClickAt(FSlateApplication& SlateApp, const FVector2D& ScreenPos);
+    bool TryFindAndClickSequencePin(FSlateApplication& SlateApp);
+
+    // ── Core multi-connect state ─────────────────────────────────────────────
     bool bPendingReconnect = false;
+    bool bDownOnPin        = false;
 
-    // True when the last left-mouse-down landed on a graph pin widget
-    bool bDownOnPin = false;
-
-    // Screen-space position of the source pin (recorded at mouse-down)
     FVector2D SourcePinScreenPos = FVector2D::ZeroVector;
+    TWeakPtr<SWindow>     SourceWindowWeak;
+    TWeakPtr<SGraphPanel> SourceGraphPanelWeak;
 
-    // The Slate window that hosted the drag (for routing the synthetic event)
-    TWeakPtr<SWindow> SourceWindowWeak;
+    // FEdGraphPinReference safely stores a UEdGraphPin* via its owning node +
+    // pin GUID (UEdGraphPin is not a UObject, so TWeakObjectPtr can't be used).
+    FEdGraphPinReference SourcePinRef;
+
+    // ── Exec / Sequence state ────────────────────────────────────────────────
+    bool bWaitingForSequencePinWidget = false;
+    FEdGraphPinReference                      PendingThenPinRef;
+    TWeakObjectPtr<UK2Node_ExecutionSequence> SequenceNodeWeak;
 };

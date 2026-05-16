@@ -4,6 +4,7 @@
 #include "Modules/ModuleManager.h"
 
 class FMultiConnectPreprocessor;
+class FMultiPinDragPreprocessor;
 
 class FUEnodeTweaksModule : public IModuleInterface
 {
@@ -12,5 +13,6 @@ public:
     virtual void ShutdownModule() override;
 
 private:
-    TSharedPtr<FMultiConnectPreprocessor> InputPreprocessor;
+    TSharedPtr<FMultiConnectPreprocessor> MultiConnectProcessor;
+    TSharedPtr<FMultiPinDragPreprocessor> MultiPinDragProcessor;
 };
