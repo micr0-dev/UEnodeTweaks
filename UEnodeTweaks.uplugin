@@ -1,0 +1,24 @@
+{
+	"FileVersion": 3,
+	"Version": 1,
+	"VersionName": "1.0",
+	"FriendlyName": "UEnodeTweaks",
+	"Description": "",
+	"Category": "Other",
+	"CreatedBy": "Micr0-dev",
+	"CreatedByURL": "https://github.com/micr0-dev/UEnodeTweaks",
+	"DocsURL": "",
+	"MarketplaceURL": "",
+	"SupportURL": "",
+	"CanContainContent": true,
+	"IsBetaVersion": false,
+	"IsExperimentalVersion": false,
+	"Installed": false,
+	"Modules": [
+		{
+			"Name": "UEnodeTweaks",
+			"Type": "Runtime",
+			"LoadingPhase": "Default"
+		}
+	]
+}
