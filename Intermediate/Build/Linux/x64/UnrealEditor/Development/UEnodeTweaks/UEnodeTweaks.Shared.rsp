@@ -284,6 +284,7 @@
 -I"../Intermediate/Build/Linux/UnrealEditor/Inc/MaterialUtilities/UHT"
 -I"Developer/MaterialUtilities/Public"
 -I"Editor/KismetCompiler/Public"
+-I"/home/micr0/Documents/Unreal Projects/PluginDev/Plugins/UEnodeTweaks/Intermediate/Build/Linux/UnrealEditor/Inc/UEnodeTweaks/UHT"
 -I"/home/micr0/Documents/Unreal Projects/PluginDev/Plugins/UEnodeTweaks/Source"
 -I"/home/micr0/Documents/Unreal Projects/PluginDev/Plugins/UEnodeTweaks/Source/UEnodeTweaks/Public"
 -isystem"ThirdParty/LibTiff/Source/Unix/x86_64-unknown-linux-gnu"

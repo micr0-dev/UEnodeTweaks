@@ -63,7 +63,7 @@
 -target x86_64-unknown-linux-gnu
 --sysroot="../Extras/ThirdPartyNotUE/SDKs/HostLinux/Linux_x64/v22_clang-16.0.6-centos7/x86_64-unknown-linux-gnu"
 @"/home/micr0/Documents/Unreal Projects/PluginDev/Plugins/UEnodeTweaks/Intermediate/Build/Linux/x64/UnrealEditor/Development/UEnodeTweaks/UEnodeTweaks.Shared.rsp"
--include-pch "/home/micr0/Documents/Unreal Projects/PluginDev/Intermediate/Build/Linux/x64/PluginDevEditor/Development/Engine/SharedPCH.Engine.Project.ValApi.Cpp20.h.gch"
+-include-pch "/home/micr0/Documents/Unreal Projects/PluginDev/Intermediate/Build/Linux/x64/PluginDevEditor/Development/Engine/SharedPCH.Engine.Cpp20.h.gch"
 -include "/home/micr0/Documents/Unreal Projects/PluginDev/Plugins/UEnodeTweaks/Intermediate/Build/Linux/x64/UnrealEditor/Development/UEnodeTweaks/Definitions.UEnodeTweaks.h"
 -x c++
 -std=c++20

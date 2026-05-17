@@ -21,6 +21,8 @@ public class UEnodeTweaks : ModuleRules
             "GraphEditor",
             "BlueprintGraph",
             "InputCore",
+            "DeveloperSettings",
+            "KismetCompiler",
         });
 
     }
