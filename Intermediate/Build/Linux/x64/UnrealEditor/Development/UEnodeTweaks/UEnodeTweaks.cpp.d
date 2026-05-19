@@ -1,6 +1,6 @@
 /home/micr0/Documents/Unreal\ Projects/PluginDev/Plugins/UEnodeTweaks/Intermediate/Build/Linux/x64/UnrealEditor/Development/UEnodeTweaks/UEnodeTweaks.cpp.o: \
-  /home/micr0/Documents/Unreal\ Projects/PluginDev/Intermediate/Build/Linux/x64/PluginDevEditor/Development/Engine/SharedPCH.Engine.Cpp20.h \
-  /home/micr0/Documents/Unreal\ Projects/PluginDev/Intermediate/Build/Linux/x64/PluginDevEditor/Development/Engine/SharedDefinitions.Engine.Cpp20.h \
+  /home/micr0/Documents/Unreal\ Projects/PluginDev/Intermediate/Build/Linux/x64/PluginDevEditor/Development/Engine/SharedPCH.Engine.Project.ValApi.Cpp20.h \
+  /home/micr0/Documents/Unreal\ Projects/PluginDev/Intermediate/Build/Linux/x64/PluginDevEditor/Development/Engine/SharedDefinitions.Engine.Project.ValApi.Cpp20.h \
   /home/micr0/UnrealEngine5.4.4/Engine/Source/Runtime/Engine/Public/EngineSharedPCH.h \
   /home/micr0/UnrealEngine5.4.4/Engine/Source/Runtime/Slate/Public/SlateSharedPCH.h \
   /home/micr0/UnrealEngine5.4.4/Engine/Source/Runtime/CoreUObject/Public/CoreUObjectSharedPCH.h \

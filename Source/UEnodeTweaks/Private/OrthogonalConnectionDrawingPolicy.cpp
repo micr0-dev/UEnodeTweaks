@@ -1,5 +1,6 @@
 #include "OrthogonalConnectionDrawingPolicy.h"
 #include "NodeTweaksSettings.h"
+#include "HoverHighlightPreprocessor.h"
 
 #include "Rendering/DrawElements.h"
 #include "Layout/ArrangedChildren.h"
@@ -95,6 +96,23 @@ void FOrthogonalKismetConnectionDrawingPolicy::Draw(
 void FOrthogonalKismetConnectionDrawingPolicy::DrawConnection(
     int32 LayerId, const FVector2D& Start, const FVector2D& End, const FConnectionParams& Params)
 {
+    // During hover highlight: dim wires that don't connect two highlighted nodes
+    FConnectionParams LocalParams = Params;
+    if (FHoverHighlightPreprocessor::IsHighlightActive() && Params.AssociatedPin1 && Params.AssociatedPin2)
+    {
+        UEdGraphNode* N1 = Params.AssociatedPin1->GetOwningNodeUnchecked();
+        UEdGraphNode* N2 = Params.AssociatedPin2->GetOwningNodeUnchecked();
+        const TSet<UEdGraphNode*>& Highlighted = FHoverHighlightPreprocessor::GetHighlightedNodes();
+        if (!Highlighted.Contains(N1) || !Highlighted.Contains(N2))
+        {
+            const float Dim = FHoverHighlightPreprocessor::GetCurrentDimOpacity();
+            LocalParams.WireColor = FLinearColor(Params.WireColor.R * Dim,
+                                                  Params.WireColor.G * Dim,
+                                                  Params.WireColor.B * Dim,
+                                                  Params.WireColor.A * Dim);
+        }
+    }
+
     const UNodeTweaksSettings* S = GetDefault<UNodeTweaksSettings>();
 
     TArray<FVector2D> Path;
@@ -117,13 +135,13 @@ void FOrthogonalKismetConnectionDrawingPolicy::DrawConnection(
     else
     {
         // Bezier mode: sample spline into a polyline for bridge detection / drawing
-        Path = SampleBezierAsPolyline(Start, End, Params);
+        Path = SampleBezierAsPolyline(Start, End, LocalParams);
     }
 
     if (S->bWireBridges)
-        DrawPathWithBridges(LayerId, Path, Params);
+        DrawPathWithBridges(LayerId, Path, LocalParams);
     else
-        DrawPolyline(LayerId, Path, Params);
+        DrawPolyline(LayerId, Path, LocalParams);
 
     AllPaths.Add(Path);
 }

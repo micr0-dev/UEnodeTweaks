@@ -2,6 +2,7 @@
 #include "MultiConnectPreprocessor.h"
 #include "MultiPinDragPreprocessor.h"
 #include "SmartArrangePreprocessor.h"
+#include "HoverHighlightPreprocessor.h"
 #include "OrthogonalConnectionDrawingPolicy.h"
 #include "NodeTweaksSettings.h"
 #include "MathExpressionNode.h"
@@ -46,7 +47,7 @@ struct FOrthogonalConnectionFactory : public FGraphPanelPinConnectionFactory
         UEdGraph*                 InGraphObj) const override
     {
         const UNodeTweaksSettings* S = GetDefault<UNodeTweaksSettings>();
-        if (!S->bOrthogonalWires && !S->bWireBridges)
+        if (!S->bOrthogonalWires && !S->bWireBridges && !FHoverHighlightPreprocessor::IsHighlightActive())
             return nullptr;
 
         if (Schema->IsA<UEdGraphSchema_K2>())
@@ -81,6 +82,9 @@ void FUEnodeTweaksModule::StartupModule()
     SmartArrangeProcessor = MakeShared<FSmartArrangePreprocessor>();
     FSlateApplication::Get().RegisterInputPreProcessor(SmartArrangeProcessor, 0);
 
+    HoverHighlightProcessor = MakeShared<FHoverHighlightPreprocessor>();
+    FSlateApplication::Get().RegisterInputPreProcessor(HoverHighlightProcessor, 2);
+
     ConnectionFactory = MakeShared<FOrthogonalConnectionFactory>();
     FEdGraphUtilities::RegisterVisualPinConnectionFactory(ConnectionFactory);
 
@@ -106,12 +110,15 @@ void FUEnodeTweaksModule::ShutdownModule()
     {
         if (SmartArrangeProcessor.IsValid())
             FSlateApplication::Get().UnregisterInputPreProcessor(SmartArrangeProcessor);
+        if (HoverHighlightProcessor.IsValid())
+            FSlateApplication::Get().UnregisterInputPreProcessor(HoverHighlightProcessor);
         if (MultiConnectProcessor.IsValid())
             FSlateApplication::Get().UnregisterInputPreProcessor(MultiConnectProcessor);
         if (MultiPinDragProcessor.IsValid())
             FSlateApplication::Get().UnregisterInputPreProcessor(MultiPinDragProcessor);
     }
     SmartArrangeProcessor.Reset();
+    HoverHighlightProcessor.Reset();
     MultiConnectProcessor.Reset();
     MultiPinDragProcessor.Reset();
 }

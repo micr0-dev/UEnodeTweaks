@@ -6,6 +6,7 @@
 class FMultiConnectPreprocessor;
 class FMultiPinDragPreprocessor;
 class FSmartArrangePreprocessor;
+class FHoverHighlightPreprocessor;
 struct FGraphPanelPinConnectionFactory;
 struct FGraphPanelNodeFactory;
 
@@ -19,6 +20,7 @@ private:
     TSharedPtr<FMultiConnectPreprocessor>       MultiConnectProcessor;
     TSharedPtr<FMultiPinDragPreprocessor>       MultiPinDragProcessor;
     TSharedPtr<FSmartArrangePreprocessor>       SmartArrangeProcessor;
+    TSharedPtr<FHoverHighlightPreprocessor>     HoverHighlightProcessor;
     TSharedPtr<FGraphPanelPinConnectionFactory> ConnectionFactory;
     TSharedPtr<FGraphPanelNodeFactory>          NodeFactory;
 };
