@@ -23,6 +23,8 @@ class FHoverHighlightPreprocessor : public IInputProcessor
 public:
     virtual bool HandleMouseMoveEvent(FSlateApplication& SlateApp,
                                       const FPointerEvent& InMouseEvent) override;
+    virtual bool HandleKeyDownEvent(FSlateApplication& SlateApp,
+                                    const FKeyEvent& InKeyEvent) override;
     virtual bool HandleKeyUpEvent(FSlateApplication& SlateApp,
                                   const FKeyEvent& InKeyEvent) override;
     virtual void Tick(const float DeltaTime, FSlateApplication& SlateApp,

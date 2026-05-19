@@ -141,6 +141,37 @@ void FHoverHighlightPreprocessor::Tick(const float DeltaTime, FSlateApplication&
 // IInputProcessor
 // ---------------------------------------------------------------------------
 
+bool FHoverHighlightPreprocessor::HandleKeyDownEvent(FSlateApplication& SlateApp,
+                                                     const FKeyEvent& InKeyEvent)
+{
+    if (InKeyEvent.IsRepeat()) return false;
+    if (InKeyEvent.GetKey() != EKeys::LeftControl && InKeyEvent.GetKey() != EKeys::RightControl)
+        return false;
+
+    // Ctrl just pressed — apply highlight to whatever is currently under the cursor
+    FWidgetPath Path = SlateApp.LocateWindowUnderMouse(
+        SlateApp.GetCursorPos(),
+        SlateApp.GetInteractiveTopLevelWindows());
+
+    SGraphPanel*  Panel       = FindPanelInPath(Path);
+    UEdGraphNode* HoveredNode = Panel ? FindNodeInPath(Path) : nullptr;
+
+    if (Panel && HoveredNode)
+    {
+        if (Panel != LastPanel && HighlightedNodes.Num() > 0)
+        {
+            if (LastPanel) SetAllNodeOpacity(LastPanel, 1.0f);
+            HighlightedNodes.Empty();
+            CurrentDimOpacity = 1.0f;
+        }
+        LastPanel       = Panel;
+        LastHoveredNode = HoveredNode;
+        ApplyHighlight(Panel, HoveredNode);
+    }
+
+    return false;
+}
+
 bool FHoverHighlightPreprocessor::HandleKeyUpEvent(FSlateApplication& /*SlateApp*/,
                                                     const FKeyEvent& InKeyEvent)
 {
