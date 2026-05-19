@@ -24,3 +24,7 @@ Draws small hop-overs where wires cross, making dense graphs easier to read. Tog
 
 ### Hover Highlight (Ctrl + Hover)
 Hold Ctrl and hover over a node to dim all unrelated nodes and wires. Only the hovered node and its direct neighbors stay fully visible. Fades in and out smoothly.
+
+## Installation
+
+Download the latest release, drop the `UEnodeTweaks` folder into your project's `Plugins/` directory, and restart the editor. Enable the plugin in **Edit → Plugins** if it isn't already. Settings are in **Editor Preferences → Plugins → UE Node Tweaks**.
