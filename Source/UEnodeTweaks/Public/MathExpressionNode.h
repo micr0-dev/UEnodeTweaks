@@ -25,7 +25,13 @@ public:
     UPROPERTY(Transient)
     FString ParseError;
 
+    /** Serialized expand version — compared against kCurrentExpandVersion in PostLoad.
+     *  Bump kCurrentExpandVersion whenever ExpandNode logic changes. */
+    UPROPERTY()
+    int32 SavedExpandVersion = 0;
+
     // ---- UK2Node interface -------------------------------------------------
+    virtual void PostLoad() override;
     virtual void AllocateDefaultPins() override;
     virtual void ExpandNode(class FKismetCompilerContext& CompilerContext, UEdGraph* SourceGraph) override;
     virtual bool IsNodePure() const override { return true; }

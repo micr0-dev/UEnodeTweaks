@@ -7,7 +7,9 @@
 #include "K2Node_CallFunction.h"
 #include "K2Node_Knot.h"
 #include "Kismet/KismetMathLibrary.h"
+#include "Kismet/KismetSystemLibrary.h"
 #include "KismetCompiler.h"
+#include "Kismet2/BlueprintEditorUtils.h"
 #include "SGraphActionMenu.h"
 
 // ---------------------------------------------------------------------------
@@ -37,17 +39,17 @@ namespace MathExprHelpers
         return Node;
     }
 
-    /** Spawn MakeLiteralFloat and return its return pin. Sets default value via the Value input pin. */
-    static UEdGraphPin* SpawnLiteralFloat(FKismetCompilerContext& Ctx, UEdGraph* Graph,
-                                          double Value, UK2Node* SourceNode)
+    /** Spawn MakeLiteralDouble (KismetSystemLibrary) and return its return pin. */
+    static UEdGraphPin* SpawnLiteralDouble(FKismetCompilerContext& Ctx, UEdGraph* Graph,
+                                           double Value, UK2Node* SourceNode)
     {
-        UFunction* Func = UKismetMathLibrary::StaticClass()->FindFunctionByName(TEXT("MakeLiteralFloat"));
+        UFunction* Func = UKismetSystemLibrary::StaticClass()->FindFunctionByName(TEXT("MakeLiteralDouble"));
         if (!Func) return nullptr;
 
         UK2Node_CallFunction* Node = SpawnCall(Ctx, Graph, Func, SourceNode);
         UEdGraphPin* ValPin = Node->FindPin(TEXT("Value"));
         if (ValPin)
-            ValPin->DefaultValue = FString::SanitizeFloat((float)Value);
+            ValPin->DefaultValue = FString::SanitizeFloat(Value);
         return Node->GetReturnValuePin();
     }
 
@@ -64,16 +66,16 @@ namespace MathExprHelpers
         UEdGraphPin* R = EmitNode(Ast->Children[1], Ctx, Graph, SourceNode, VarPins);
         if (!L || !R) return nullptr;
 
-        // Percent: FMod
+        // Percent: fmod-style — use Percent_FloatFloat (double, UFUNCTION, pins "A"/"B")
         if (Ast->Op == EMathTokenType::Percent)
         {
-            UFunction* Func = UKismetMathLibrary::StaticClass()->FindFunctionByName(TEXT("FMod"));
+            UFunction* Func = UKismetMathLibrary::StaticClass()->FindFunctionByName(TEXT("Percent_FloatFloat"));
             if (!Func) return nullptr;
             UK2Node_CallFunction* Node = SpawnCall(Ctx, Graph, Func, SourceNode);
-            UEdGraphPin* DivPin    = Node->FindPin(TEXT("Dividend"));
-            UEdGraphPin* DivisorPin = Node->FindPin(TEXT("Divisor"));
-            if (DivPin)    L->MakeLinkTo(DivPin);
-            if (DivisorPin) R->MakeLinkTo(DivisorPin);
+            UEdGraphPin* PA = Node->FindPin(TEXT("A"));
+            UEdGraphPin* PB = Node->FindPin(TEXT("B"));
+            if (PA) L->MakeLinkTo(PA);
+            if (PB) R->MakeLinkTo(PB);
             return Node->GetReturnValuePin();
         }
 
@@ -93,10 +95,10 @@ namespace MathExprHelpers
         FName FuncName;
         switch (Ast->Op)
         {
-        case EMathTokenType::Plus:  FuncName = TEXT("Add_FloatFloat");      break;
-        case EMathTokenType::Minus: FuncName = TEXT("Subtract_FloatFloat"); break;
-        case EMathTokenType::Star:  FuncName = TEXT("Multiply_FloatFloat"); break;
-        case EMathTokenType::Slash: FuncName = TEXT("Divide_FloatFloat");   break;
+        case EMathTokenType::Plus:  FuncName = TEXT("Add_DoubleDouble");      break;
+        case EMathTokenType::Minus: FuncName = TEXT("Subtract_DoubleDouble"); break;
+        case EMathTokenType::Star:  FuncName = TEXT("Multiply_DoubleDouble"); break;
+        case EMathTokenType::Slash: FuncName = TEXT("Divide_DoubleDouble");   break;
         default: return nullptr;
         }
 
@@ -116,28 +118,28 @@ namespace MathExprHelpers
                                      const TMap<FString, UEdGraphPin*>& VarPins)
     {
         static const TMap<FString, FString> kFuncMap = {
-            { TEXT("sin"),   TEXT("Sin")                     },
-            { TEXT("cos"),   TEXT("Cos")                     },
-            { TEXT("tan"),   TEXT("Tan")                     },
-            { TEXT("asin"),  TEXT("Asin")                    },
-            { TEXT("acos"),  TEXT("Acos")                    },
-            { TEXT("atan"),  TEXT("Atan")                    },
-            { TEXT("atan2"), TEXT("Atan2_FloatFloat")        },
-            { TEXT("sqrt"),  TEXT("Sqrt")                    },
+            { TEXT("sin"),   TEXT("Sin")                        },
+            { TEXT("cos"),   TEXT("Cos")                        },
+            { TEXT("tan"),   TEXT("Tan")                        },
+            { TEXT("asin"),  TEXT("Asin")                       },
+            { TEXT("acos"),  TEXT("Acos")                       },
+            { TEXT("atan"),  TEXT("Atan")                       },
+            { TEXT("atan2"), TEXT("Atan2")                      },
+            { TEXT("sqrt"),  TEXT("Sqrt")                       },
             { TEXT("pow"),   TEXT("MultiplyMultiply_FloatFloat") },
-            { TEXT("abs"),   TEXT("Abs_Float")               },
-            { TEXT("min"),   TEXT("FMin")                    },
-            { TEXT("max"),   TEXT("FMax")                    },
-            { TEXT("clamp"), TEXT("FClamp")                  },
-            { TEXT("lerp"),  TEXT("Lerp_FloatFloat")         },
-            { TEXT("floor"), TEXT("FFloor")                  },
-            { TEXT("ceil"),  TEXT("FCeil")                   },
-            { TEXT("round"), TEXT("FRoundToFloat")           },
-            { TEXT("sign"),  TEXT("SignOfFloat")             },
-            { TEXT("exp"),   TEXT("Exp")                     },
-            { TEXT("log"),   TEXT("Log_Float")               },
-            { TEXT("ln"),    TEXT("Loge")                    },
-            { TEXT("mod"),   TEXT("FMod")                    },
+            { TEXT("abs"),   TEXT("Abs")                        },
+            { TEXT("min"),   TEXT("FMin")                       },
+            { TEXT("max"),   TEXT("FMax")                       },
+            { TEXT("clamp"), TEXT("FClamp")                     },
+            { TEXT("lerp"),  TEXT("Lerp")                       },
+            { TEXT("floor"), TEXT("FFloor")                     },
+            { TEXT("ceil"),  TEXT("FCeil")                      },
+            { TEXT("round"), TEXT("Round")                      },
+            { TEXT("sign"),  TEXT("SignOfFloat")                },
+            { TEXT("exp"),   TEXT("Exp")                        },
+            { TEXT("log"),   TEXT("Log")                        },
+            { TEXT("ln"),    TEXT("Loge")                       },
+            { TEXT("mod"),   TEXT("Percent_FloatFloat")         },
         };
 
         const FString& Name = Ast->Name;
@@ -169,10 +171,10 @@ namespace MathExprHelpers
 
         UEdGraphPin* RetPin = Node->GetReturnValuePin();
 
-        // floor / ceil return int32 → convert to float
-        if (Name == TEXT("floor") || Name == TEXT("ceil"))
+        // floor / ceil / round return int32 → convert to double
+        if (Name == TEXT("floor") || Name == TEXT("ceil") || Name == TEXT("round"))
         {
-            UFunction* Conv = UKismetMathLibrary::StaticClass()->FindFunctionByName(TEXT("Conv_IntToFloat"));
+            UFunction* Conv = UKismetMathLibrary::StaticClass()->FindFunctionByName(TEXT("Conv_IntToDouble"));
             if (Conv && RetPin)
             {
                 UK2Node_CallFunction* ConvNode = SpawnCall(Ctx, Graph, Conv, SourceNode);
@@ -181,6 +183,14 @@ namespace MathExprHelpers
                 if (IntIn) RetPin->MakeLinkTo(IntIn);
                 return ConvNode->GetReturnValuePin();
             }
+        }
+
+        // log(x) — set Base pin to 10.0 so log means log base 10
+        if (Name == TEXT("log") && RetPin)
+        {
+            UEdGraphPin* BasePin = Node->FindPin(TEXT("Base"));
+            if (BasePin && BasePin->LinkedTo.Num() == 0)
+                BasePin->DefaultValue = TEXT("10.0");
         }
 
         return RetPin;
@@ -195,10 +205,10 @@ namespace MathExprHelpers
         switch (Ast->Kind)
         {
         case EMathNodeKind::Number:
-            return SpawnLiteralFloat(Ctx, Graph, Ast->NumValue, SourceNode);
+            return SpawnLiteralDouble(Ctx, Graph, Ast->NumValue, SourceNode);
 
         case EMathNodeKind::Constant:
-            return SpawnLiteralFloat(Ctx, Graph, ConstantValue(Ast->Name), SourceNode);
+            return SpawnLiteralDouble(Ctx, Graph, ConstantValue(Ast->Name), SourceNode);
 
         case EMathNodeKind::Variable:
         {
@@ -221,7 +231,7 @@ namespace MathExprHelpers
             if (!Func)
             {
                 // Fallback: multiply by -1
-                Func = UKismetMathLibrary::StaticClass()->FindFunctionByName(TEXT("Multiply_FloatFloat"));
+                Func = UKismetMathLibrary::StaticClass()->FindFunctionByName(TEXT("Multiply_DoubleDouble"));
                 if (!Func) return nullptr;
                 UK2Node_CallFunction* Node = SpawnCall(Ctx, Graph, Func, SourceNode);
                 UEdGraphPin* PA = Node->FindPin(TEXT("A"));
@@ -245,9 +255,26 @@ namespace MathExprHelpers
 // UK2Node_MathExpr
 // ---------------------------------------------------------------------------
 
+// Bump this any time ExpandNode logic changes so saved Blueprints auto-recompile.
+static constexpr int32 kCurrentExpandVersion = 1;
+
 UK2Node_MathExpr::UK2Node_MathExpr()
 {
     Expression = TEXT("x");
+}
+
+void UK2Node_MathExpr::PostLoad()
+{
+    Super::PostLoad();
+
+    if (HasAnyFlags(RF_ClassDefaultObject)) return;
+
+    if (SavedExpandVersion < kCurrentExpandVersion)
+    {
+        SavedExpandVersion = kCurrentExpandVersion;
+        if (HasValidBlueprint())
+            FBlueprintEditorUtils::MarkBlueprintAsModified(GetBlueprint());
+    }
 }
 
 void UK2Node_MathExpr::AllocateDefaultPins()

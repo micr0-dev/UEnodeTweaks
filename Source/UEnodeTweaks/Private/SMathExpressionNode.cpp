@@ -8,6 +8,7 @@
 #include "Styling/AppStyle.h"
 #include "ScopedTransaction.h"
 #include "Framework/Application/SlateApplication.h"
+#include "Kismet2/BlueprintEditorUtils.h"
 
 void SMathExpressionNode::Construct(const FArguments& InArgs, UK2Node_MathExpr* InNode)
 {
@@ -92,6 +93,8 @@ void SMathExpressionNode::OnExpressionTextCommitted(const FText& NewText, ETextC
     MathNode->Expression = NewExpr;
     MathNode->RebuildPins();
 
-    // Notify the graph that pins changed
+    // Notify the graph that pins changed, and mark the Blueprint dirty for recompilation
     MathNode->GetGraph()->NotifyGraphChanged();
+    if (UBlueprint* BP = MathNode->GetBlueprint())
+        FBlueprintEditorUtils::MarkBlueprintAsModified(BP);
 }
