@@ -17,10 +17,10 @@ Press Q with multiple nodes selected to auto-arrange them into clean columns. No
 A pure Blueprint node that evaluates an inline math expression. Variables become input pins, result is a float output. Supports standard math functions (sin, cos, tan, asin, acos, atan, atan2, sqrt, pow, abs, min, max, clamp, lerp, floor, ceil, round, sign, exp, log, ln, mod). Type an expression directly into the node search to create one instantly. Editing the expression automatically marks the Blueprint for recompilation.
 
 ### Orthogonal Wire Routing (EXPERIMENTAL)
-Replaces Bezier curves with 90-degree routed wires using A* pathfinding. Toggle in Project Settings > Node Tweaks.
+Replaces Bezier curves with 90-degree routed wires using A* pathfinding. Toggle in Editor Preferences > Plugins > UE Node Tweaks.
 
 ### Wire Bridges
-Draws small hop-overs where wires cross, making dense graphs easier to read. Toggle in Project Settings > Node Tweaks.
+Draws small hop-overs where wires cross, making dense graphs easier to read. Toggle in Editor Preferences > Plugins > UE Node Tweaks.
 
 ### Hover Highlight (Ctrl + Hover)
 Hold Ctrl and hover over a node to dim all unrelated nodes and wires. Only the hovered node and its direct neighbors stay fully visible. Fades in and out smoothly.

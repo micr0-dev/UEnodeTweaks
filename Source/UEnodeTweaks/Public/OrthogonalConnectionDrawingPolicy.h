@@ -35,6 +35,16 @@ private:
     TArray<FBox2D> NodeObstacles;
 
     /**
+     * Two-pass bridge rendering state.
+     * Phase 1 (bCollectMode=true): DrawConnection stores paths here instead of drawing.
+     * Phase 2: AllPaths is set from CollectedPaths so every crossing is known upfront.
+     */
+    bool                      bCollectMode    = false;
+    int32                     PhaseDrawIndex  = 0;
+    TArray<TArray<FVector2D>> CollectedPaths;
+
+
+    /**
      * Directional occupancy map for A* routing.
      * Key = grid cell. Value = bitmask of kDirs[] indices that already have a wire
      * passing through this cell in that axis (bits 0–3 = right/left/down/up).
@@ -42,19 +52,26 @@ private:
      */
     TMap<FIntPoint, uint8> OccupiedDirs;
 
+    /**
+     * Per-cell set of nodes whose wires pass through that cell.
+     * Overlap penalty is skipped if the new wire shares a node with an existing occupant.
+     */
+    TMap<FIntPoint, TPair<UEdGraphNode*, UEdGraphNode*>> OccupiedNodes;
+
     /** Polyline representations of all wires drawn so far this frame (bridge crossing detection). */
     TArray<TArray<FVector2D>> AllPaths;
 
     // ---- Orthogonal routing ----------------------------------------------------
 
-    /** Run A* in draw-space and return smoothed waypoints. */
-    TArray<FVector2D> FindOrthogonalPath(const FVector2D& Start, const FVector2D& End) const;
+    /** Run A* in draw-space and return smoothed waypoints. NodeA/NodeB are the wire's endpoint nodes (for overlap exemption). */
+    TArray<FVector2D> FindOrthogonalPath(const FVector2D& Start, const FVector2D& End, float Grid,
+                                          UEdGraphNode* NodeA, UEdGraphNode* NodeB) const;
 
     /** L/Z-shape fallback used when A* hits its iteration cap. */
     TArray<FVector2D> ComputeFallbackPath(const FVector2D& Start, const FVector2D& End) const;
 
-    /** Mark grid cells covered by the given polyline as occupied. */
-    void MarkPathOccupied(const TArray<FVector2D>& Path, float Grid);
+    /** Mark grid cells covered by the given polyline as occupied. NodeA/NodeB are the wire's endpoint nodes. */
+    void MarkPathOccupied(const TArray<FVector2D>& Path, float Grid, UEdGraphNode* NodeA, UEdGraphNode* NodeB);
 
     // ---- Drawing helpers -------------------------------------------------------
 

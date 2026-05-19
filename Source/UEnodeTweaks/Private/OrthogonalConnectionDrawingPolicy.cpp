@@ -9,6 +9,18 @@
 #include "Algo/Reverse.h"
 
 // ---------------------------------------------------------------------------
+// Routing constants
+// ---------------------------------------------------------------------------
+
+// Grid cell size (screen pixels) is computed per-frame as GridSize * ZoomFactor
+// so paths are zoom-independent (same graph-unit grid regardless of zoom level).
+static constexpr float kTurnPenalty    = 999999.0f; // per-turn cost — high enough to always prefer fewest-turn (L/Z) paths
+static constexpr float kParallelPad    = 10.0f;   // cost for running adjacent to a parallel wire
+static constexpr float kObstacleCost   = 1000.0f;
+static constexpr float kOverlapCost    = 700.0f;  // cross-node overlap only; same-node wires are exempt
+static constexpr int32 kMaxIter        = 4000;
+
+// ---------------------------------------------------------------------------
 // Grid helpers
 // ---------------------------------------------------------------------------
 
@@ -31,6 +43,7 @@ static FORCEINLINE float ManhattanDist(const FIntPoint& A, const FIntPoint& B)
 
 // 4-directional movement: Right, Left, Down, Up
 static const FIntPoint kDirs[4] = { {1,0}, {-1,0}, {0,1}, {0,-1} };
+
 
 // ---------------------------------------------------------------------------
 // A* node state
@@ -75,6 +88,7 @@ void FOrthogonalKismetConnectionDrawingPolicy::Draw(
 {
     NodeObstacles.Reset();
     OccupiedDirs.Reset();
+    OccupiedNodes.Reset();
     AllPaths.Reset();
 
     const float Padding = 8.0f;
@@ -86,7 +100,26 @@ void FOrthogonalKismetConnectionDrawingPolicy::Draw(
         NodeObstacles.Add(FBox2D(Pos - FVector2D(Padding), Pos + Size + FVector2D(Padding)));
     }
 
-    FKismetConnectionDrawingPolicy::Draw(InPinGeometries, ArrangedNodes);
+    const UNodeTweaksSettings* S = GetDefault<UNodeTweaksSettings>();
+    if (S->bWireBridges)
+    {
+        // Phase 1: collect all paths (no drawing) so AllPaths is fully known before any arc is drawn.
+        // This makes bridges deterministic: every H/V crossing gets exactly one bridge regardless of draw order.
+        CollectedPaths.Reset();
+        bCollectMode = true;
+        FKismetConnectionDrawingPolicy::Draw(InPinGeometries, ArrangedNodes);
+        bCollectMode = false;
+
+        AllPaths = CollectedPaths;
+        PhaseDrawIndex = 0;
+
+        // Phase 2: draw everything — AllPaths is complete so every horizontal segment sees all crossings.
+        FKismetConnectionDrawingPolicy::Draw(InPinGeometries, ArrangedNodes);
+    }
+    else
+    {
+        FKismetConnectionDrawingPolicy::Draw(InPinGeometries, ArrangedNodes);
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -115,35 +148,63 @@ void FOrthogonalKismetConnectionDrawingPolicy::DrawConnection(
 
     const UNodeTweaksSettings* S = GetDefault<UNodeTweaksSettings>();
 
+    // Phase 2 (bridge draw pass): use the pre-collected path — no re-routing needed.
+    // Only consume a collected path if one exists; otherwise fall through (handles drag preview wires
+    // which call DrawConnection directly after the two-pass cycle has finished).
+    if (!bCollectMode && S->bWireBridges && PhaseDrawIndex < CollectedPaths.Num())
+    {
+        DrawPathWithBridges(LayerId, CollectedPaths[PhaseDrawIndex++], LocalParams);
+        return;
+    }
+
+    // Compute path (used in collection phase and single-pass non-bridge mode).
     TArray<FVector2D> Path;
 
     if (S->bOrthogonalWires)
     {
-        const float StubLen = S->GridSize * 2.0f;
+        const float Grid    = S->GridSize * ZoomFactor;
+        const float StubLen = Grid * 2.0f;
         const FVector2D StubOut = Start + FVector2D(StubLen, 0.0f);
         const FVector2D StubIn  = End   - FVector2D(StubLen, 0.0f);
 
+        // Extract endpoint nodes for shared-node overlap exemption
+        UEdGraphNode* NodeA = Params.AssociatedPin1 ? Params.AssociatedPin1->GetOwningNodeUnchecked() : nullptr;
+        UEdGraphNode* NodeB = Params.AssociatedPin2 ? Params.AssociatedPin2->GetOwningNodeUnchecked() : nullptr;
+
+        TArray<FVector2D> W = FindOrthogonalPath(StubOut, StubIn, Grid, NodeA, NodeB);
+
+        if (W.Num() >= 1) W[0]     = StubOut;
+        if (W.Num() >= 2) W.Last() = StubIn;
+
+        if (W.Num() >= 3)
+        {
+            W[1].Y = StubOut.Y;
+            W[W.Num() - 2].Y = StubIn.Y;
+            if (W.Num() == 3)
+                W[1].X = StubIn.X;
+        }
+
         Path.Add(Start);
-        Path.Add(StubOut);
-        for (const FVector2D& P : FindOrthogonalPath(StubOut, StubIn))
+        for (const FVector2D& P : W)
             Path.Add(P);
-        Path.Add(StubIn);
         Path.Add(End);
 
-        MarkPathOccupied(Path, S->GridSize);
+        MarkPathOccupied(Path, Grid, NodeA, NodeB);
     }
     else
     {
-        // Bezier mode: sample spline into a polyline for bridge detection / drawing
         Path = SampleBezierAsPolyline(Start, End, LocalParams);
     }
 
-    if (S->bWireBridges)
-        DrawPathWithBridges(LayerId, Path, LocalParams);
-    else
-        DrawPolyline(LayerId, Path, LocalParams);
+    if (bCollectMode)
+    {
+        // Phase 1: store path for bridge pass, don't draw.
+        CollectedPaths.Add(Path);
+        return;
+    }
 
-    AllPaths.Add(Path);
+    // Single-pass (bridges off): draw immediately.
+    DrawPolyline(LayerId, Path, LocalParams);
 }
 
 // ---------------------------------------------------------------------------
@@ -153,8 +214,45 @@ void FOrthogonalKismetConnectionDrawingPolicy::DrawConnection(
 void FOrthogonalKismetConnectionDrawingPolicy::DrawPolyline(
     int32 LayerId, const TArray<FVector2D>& Path, const FConnectionParams& Params)
 {
-    for (int32 i = 0; i < Path.Num() - 1; ++i)
-        DrawSegment(LayerId, Path[i], Path[i + 1], Params);
+    const float CR = GetDefault<UNodeTweaksSettings>()->CornerRadius * ZoomFactor;
+    if (Path.Num() < 2) return;
+
+    FVector2D Cursor = Path[0];
+
+    for (int32 i = 1; i < Path.Num(); ++i)
+    {
+        const FVector2D  B     = Path[i];
+        const bool       bLast = (i == Path.Num() - 1);
+        const FVector2D  DirIn = (B - Cursor).GetSafeNormal();
+
+        if (!bLast && CR > 0.5f)
+        {
+            const FVector2D DirOut = (Path[i + 1] - B).GetSafeNormal();
+            if (!DirIn.Equals(DirOut, 0.01f))
+            {
+                const float MaxR = FMath::Min((B - Cursor).Size() * 0.5f,
+                                              (Path[i + 1] - B).Size() * 0.5f);
+                const float R = FMath::Min(CR, MaxR);
+                if (R > 0.5f)
+                {
+                    const FVector2D ArcStart = B - DirIn  * R;
+                    const FVector2D ArcEnd   = B + DirOut * R;
+                    DrawSegment(LayerId, Cursor, ArcStart, Params);
+                    constexpr float k = 0.5523f; // optimal quarter-circle Bezier tangent ratio
+                    FSlateDrawElement::MakeDrawSpaceSpline(
+                        DrawElementsList, LayerId,
+                        ArcStart, DirIn  * (k * R),
+                        ArcEnd,   DirOut * (k * R),
+                        Params.WireThickness, ESlateDrawEffect::None, Params.WireColor);
+                    Cursor = ArcEnd;
+                    continue;
+                }
+            }
+        }
+
+        DrawSegment(LayerId, Cursor, B, Params);
+        Cursor = B;
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -200,87 +298,105 @@ void FOrthogonalKismetConnectionDrawingPolicy::DrawPathWithBridges(
     int32 LayerId, const TArray<FVector2D>& Path, const FConnectionParams& Params) const
 {
     const UNodeTweaksSettings* S = GetDefault<UNodeTweaksSettings>();
-    const float R = S->BridgeRadius * ZoomFactor;
-
+    const float R_bridge = S->BridgeRadius * ZoomFactor;
+    const float R_corner = S->CornerRadius * ZoomFactor;
     auto* MutableThis = const_cast<FOrthogonalKismetConnectionDrawingPolicy*>(this);
+
+    if (Path.Num() < 2) return;
+
+    // SegStart tracks the actual draw-start of each segment (post-corner-arc).
+    FVector2D SegStart = Path[0];
 
     for (int32 si = 0; si < Path.Num() - 1; ++si)
     {
-        const FVector2D& A = Path[si];
-        const FVector2D& B = Path[si + 1];
+        const FVector2D& B     = Path[si + 1];
+        const bool       bLast = (si == Path.Num() - 2);
+        const FVector2D  Dir   = (B - SegStart).GetSafeNormal();
 
-        const FVector2D Dir    = (B - A).GetSafeNormal();
-        const FVector2D Normal = FVector2D(-Dir.Y, Dir.X); // 90° CCW = "up" for rightward wires
-
-        // Collect crossings: stored as (distance_from_A_along_Dir, crossing_point)
-        // Using distance instead of T avoids divide-by-SegLen and segment-boundary issues.
-        TArray<TPair<float, FVector2D>> Crossings;
-
-        for (const TArray<FVector2D>& PrevPath : AllPaths)
+        // Compute corner rounding at junction B (skip for last segment).
+        float     CR      = 0.f;
+        FVector2D DirNext;
+        if (!bLast && R_corner > 0.5f)
         {
-            for (int32 pi = 0; pi < PrevPath.Num() - 1; ++pi)
+            DirNext = (Path[si + 2] - B).GetSafeNormal();
+            if (!Dir.Equals(DirNext, 0.01f))
             {
-                float T; FVector2D Pt;
-                if (SegmentsIntersect(A, B, PrevPath[pi], PrevPath[pi + 1], T, Pt))
-                {
-                    const float Dist = FVector2D::DotProduct(Pt - A, Dir);
-                    Crossings.Add({ Dist, Pt });
-                }
+                const float MaxR = FMath::Min((B - SegStart).Size() * 0.5f,
+                                              (Path[si + 2] - B).Size() * 0.5f);
+                CR = FMath::Min(R_corner, MaxR);
             }
         }
 
-        Crossings.Sort([](const TPair<float,FVector2D>& X, const TPair<float,FVector2D>& Y)
+        // Segment endpoint pulled back to leave room for the corner arc.
+        const FVector2D SegEnd = (CR > 0.5f) ? B - Dir * CR : B;
+
+        // ---- Draw [SegStart, SegEnd]: vertical passes through, horizontal gets bridges ----
+        if (FMath::Abs(Dir.X) <= FMath::Abs(Dir.Y))
         {
-            return X.Key < Y.Key;
-        });
-
-        FVector2D Cursor = A;
-
-        for (const TPair<float, FVector2D>& Cross : Crossings)
+            // Vertical: no bridge arc
+            MutableThis->DrawSegment(LayerId, SegStart, SegEnd, Params);
+        }
+        else
         {
-            const FVector2D& CrossPt = Cross.Value;
+            // Horizontal: collect crossings and draw bridge arcs
+            const FVector2D Normal = FVector2D(Dir.Y, -Dir.X); // up in screen space
 
-            // Arc footprint along the segment
-            const FVector2D ArcEntry = CrossPt - Dir * R;
-            const FVector2D ArcExit  = CrossPt + Dir * R;
+            TArray<TPair<float, FVector2D>> Crossings;
+            for (const TArray<FVector2D>& PrevPath : AllPaths)
+                for (int32 pi = 0; pi < PrevPath.Num() - 1; ++pi)
+                {
+                    float T; FVector2D Pt;
+                    if (SegmentsIntersect(SegStart, SegEnd, PrevPath[pi], PrevPath[pi + 1], T, Pt))
+                        Crossings.Add({ FVector2D::DotProduct(Pt - SegStart, Dir), Pt });
+                }
 
-            // Skip if this crossing's exit is already behind the draw cursor
-            if (FVector2D::DotProduct(ArcExit - Cursor, Dir) <= 0.0f)
-                continue;
-            // Skip if crossing center is at or past the segment end
-            if (FVector2D::DotProduct(CrossPt - B, Dir) >= 0.0f)
-                continue;
+            Crossings.Sort([](const TPair<float,FVector2D>& X, const TPair<float,FVector2D>& Y)
+                { return X.Key < Y.Key; });
 
-            // Straight line up to arc entry, but not backwards
-            const FVector2D DrawTo = FVector2D::DotProduct(ArcEntry - Cursor, Dir) > 0.0f
-                ? ArcEntry : Cursor;
-            MutableThis->DrawSegment(LayerId, Cursor, DrawTo, Params);
+            FVector2D DrawCursor = SegStart;
+            for (const auto& Cross : Crossings)
+            {
+                const FVector2D& Pt      = Cross.Value;
+                const FVector2D ArcEntry = Pt - Dir * R_bridge;
+                const FVector2D ArcExit  = Pt + Dir * R_bridge;
 
-            // True semicircle via two quarter-circle Beziers joined at the apex.
-            //
-            //   ArcEntry ──Q1──► Top ──Q2──► ArcExit
-            //
-            //   Q1: T0 = Normal*(4R/3)   T1 = Dir*(4R/3)
-            //   Q2: T0 = Dir*(4R/3)      T1 = -Normal*(4R/3)
-            //
-            // Tangent magnitude (4/3)*R is the optimal quarter-circle Bezier approximation
-            // (<0.1% radial error). Together the two segments form a full semicircle.
-            const FVector2D Top = CrossPt + Normal * R;
-            const float     TM  = (4.0f / 3.0f) * R;
+                if (FVector2D::DotProduct(ArcExit - DrawCursor, Dir) <= 0.f) continue;
+                if (FVector2D::DotProduct(Pt - SegEnd, Dir)          >= 0.f) continue;
 
-            FSlateDrawElement::MakeDrawSpaceSpline(DrawElementsList, LayerId,
-                ArcEntry, Normal * TM, Top,     Dir    * TM,
-                Params.WireThickness, ESlateDrawEffect::None, Params.WireColor);
+                const FVector2D DrawTo = FVector2D::DotProduct(ArcEntry - DrawCursor, Dir) > 0.f
+                    ? ArcEntry : DrawCursor;
+                MutableThis->DrawSegment(LayerId, DrawCursor, DrawTo, Params);
 
-            FSlateDrawElement::MakeDrawSpaceSpline(DrawElementsList, LayerId,
-                Top,      Dir    * TM, ArcExit, -Normal * TM,
-                Params.WireThickness, ESlateDrawEffect::None, Params.WireColor);
+                const FVector2D Top = Pt + Normal * R_bridge;
+                const float     TM  = (4.f / 3.f) * R_bridge;
+                FSlateDrawElement::MakeDrawSpaceSpline(DrawElementsList, LayerId,
+                    ArcEntry, Normal * TM, Top,     Dir     * TM,
+                    Params.WireThickness, ESlateDrawEffect::None, Params.WireColor);
+                FSlateDrawElement::MakeDrawSpaceSpline(DrawElementsList, LayerId,
+                    Top,      Dir    * TM, ArcExit, -Normal * TM,
+                    Params.WireThickness, ESlateDrawEffect::None, Params.WireColor);
 
-            Cursor = ArcExit;
+                DrawCursor = ArcExit;
+            }
+            MutableThis->DrawSegment(LayerId, DrawCursor, SegEnd, Params);
         }
 
-        // Remaining wire after last bridge (or entire segment if no crossings)
-        MutableThis->DrawSegment(LayerId, Cursor, B, Params);
+        // ---- Corner arc at junction B ----
+        if (CR > 0.5f)
+        {
+            const FVector2D ArcEnd = B + DirNext * CR;
+            constexpr float k = 0.5523f;
+            FSlateDrawElement::MakeDrawSpaceSpline(
+                DrawElementsList, LayerId,
+                SegEnd, Dir    * (k * CR),
+                ArcEnd, DirNext * (k * CR),
+                Params.WireThickness, ESlateDrawEffect::None, Params.WireColor);
+            SegStart = ArcEnd;
+        }
+        else
+        {
+            SegStart = B;
+        }
     }
 }
 
@@ -346,11 +462,9 @@ TArray<FVector2D> FOrthogonalKismetConnectionDrawingPolicy::SampleBezierAsPolyli
 // ---------------------------------------------------------------------------
 
 TArray<FVector2D> FOrthogonalKismetConnectionDrawingPolicy::FindOrthogonalPath(
-    const FVector2D& Start, const FVector2D& End) const
+    const FVector2D& Start, const FVector2D& End, float Grid,
+    UEdGraphNode* NodeA, UEdGraphNode* NodeB) const
 {
-    const UNodeTweaksSettings* S = GetDefault<UNodeTweaksSettings>();
-    const float Grid = S->GridSize;
-
     const FIntPoint StartCell = SnapToGrid(Start, Grid);
     const FIntPoint EndCell   = SnapToGrid(End,   Grid);
 
@@ -358,20 +472,26 @@ TArray<FVector2D> FOrthogonalKismetConnectionDrawingPolicy::FindOrthogonalPath(
         return { GridToWorld(StartCell, Grid) };
 
     TMap<FIntPoint, FAStarCell> CellMap;
-    CellMap.Reserve(512);
+    CellMap.Reserve(1024);
     TArray<FAStarHeapItem> OpenHeap;
-    OpenHeap.Reserve(256);
+    OpenHeap.Reserve(512);
 
     {
         FAStarCell& S0 = CellMap.FindOrAdd(StartCell);
-        S0.G = 0.0f;
-        S0.F = ManhattanDist(StartCell, EndCell);
-        S0.Dir = -1;
+        S0.G   = 0.0f;
+        S0.F   = ManhattanDist(StartCell, EndCell);
+        // Seed direction toward the target so the path always exits in the dominant axis first.
+        // Combined with the huge kTurnPenalty this guarantees L/Z shapes (never V-H-V etc.).
+        {
+            const float dx = End.X - Start.X;
+            const float dy = End.Y - Start.Y;
+            if (FMath::Abs(dx) >= FMath::Abs(dy))
+                S0.Dir = (dx >= 0.f) ? 0 : 1; // right or left
+            else
+                S0.Dir = (dy >= 0.f) ? 2 : 3; // down or up
+        }
         OpenHeap.HeapPush(FAStarHeapItem{ S0.F, StartCell });
     }
-
-    constexpr int32 kMaxIter    = 500;
-    constexpr float kObstacleCost = 1000.0f;
 
     int32 Iter   = 0;
     bool  bFound = false;
@@ -398,21 +518,37 @@ TArray<FVector2D> FOrthogonalKismetConnectionDrawingPolicy::FindOrthogonalPath(
             if (NData.bClosed) continue;
 
             float Cost = 1.0f;
-            if (CurDir != -1 && d != CurDir) Cost += S->TurnPenalty;
+            if (CurDir != -1 && d != CurDir) Cost += kTurnPenalty;
 
+            // Node obstacle avoidance
             const FVector2D WP = GridToWorld(Neighbor, Grid);
             for (const FBox2D& Box : NodeObstacles)
                 if (Box.IsInside(WP)) { Cost += kObstacleCost; break; }
 
+            // Same-axis overlap: penalize only if the occupying wire shares no node with this wire.
+            const uint8 SameAxisMask = (1 << d) | (1 << (d ^ 1));
             if (const uint8* CellDirs = OccupiedDirs.Find(Neighbor))
             {
-                // Bits for the same axis (e.g. right & left share axis 0; down & up share axis 1)
-                const uint8 SameAxisMask = (1 << d) | (1 << (d ^ 1));
                 if (*CellDirs & SameAxisMask)
-                    Cost += 10000.0f; // same-direction overlap: effectively impassable
-                else
-                    Cost += S->CrossingPenalty; // perpendicular crossing: soft preference
+                {
+                    bool bSharedNode = false;
+                    if (NodeA || NodeB)
+                    {
+                        if (const TPair<UEdGraphNode*, UEdGraphNode*>* Occ = OccupiedNodes.Find(Neighbor))
+                            bSharedNode = (Occ->Key   == NodeA || Occ->Key   == NodeB ||
+                                           Occ->Value == NodeA || Occ->Value == NodeB);
+                    }
+                    if (!bSharedNode)
+                        Cost += kOverlapCost;
+                }
             }
+
+            // Parallel padding: discourage cells immediately adjacent to a parallel wire
+            const bool bHoriz = (d < 2);
+            const FIntPoint PerpA = Neighbor + (bHoriz ? FIntPoint(0,  1) : FIntPoint( 1, 0));
+            const FIntPoint PerpB = Neighbor + (bHoriz ? FIntPoint(0, -1) : FIntPoint(-1, 0));
+            if (const uint8* DA = OccupiedDirs.Find(PerpA)) if (*DA & SameAxisMask) Cost += kParallelPad;
+            if (const uint8* DB = OccupiedDirs.Find(PerpB)) if (*DB & SameAxisMask) Cost += kParallelPad;
 
             const float NewG = CurG + Cost;
             if (NewG < NData.G)
@@ -471,7 +607,7 @@ TArray<FVector2D> FOrthogonalKismetConnectionDrawingPolicy::ComputeFallbackPath(
 // ---------------------------------------------------------------------------
 
 void FOrthogonalKismetConnectionDrawingPolicy::MarkPathOccupied(
-    const TArray<FVector2D>& Path, float Grid)
+    const TArray<FVector2D>& Path, float Grid, UEdGraphNode* NodeA, UEdGraphNode* NodeB)
 {
     for (int32 i = 0; i < Path.Num() - 1; ++i)
     {
@@ -490,13 +626,16 @@ void FOrthogonalKismetConnectionDrawingPolicy::MarkPathOccupied(
         // Mark both directions on this axis (right+left share axis, down+up share axis)
         const uint8 AxisMask = static_cast<uint8>((1 << DirIdx) | (1 << (DirIdx ^ 1)));
 
+        const TPair<UEdGraphNode*, UEdGraphNode*> NodePair(NodeA, NodeB);
         FIntPoint Cur = A;
         while (Cur != B)
         {
             OccupiedDirs.FindOrAdd(Cur) |= AxisMask;
+            OccupiedNodes.FindOrAdd(Cur) = NodePair;
             Cur.X += Delta.X;
             Cur.Y += Delta.Y;
         }
         OccupiedDirs.FindOrAdd(B) |= AxisMask;
+        OccupiedNodes.FindOrAdd(B) = NodePair;
     }
 }

@@ -15,17 +15,13 @@ public:
     UPROPERTY(EditAnywhere, config, Category="Wire Routing")
     bool bOrthogonalWires;
 
-    /** Grid cell size in screen pixels used by the A* router. Smaller = more precise paths, higher CPU cost. */
-    UPROPERTY(EditAnywhere, config, Category="Wire Routing", meta=(ClampMin="8.0", ClampMax="64.0"))
+    /** Routing grid size in graph units. Smaller = more precise paths, higher CPU cost. */
+    UPROPERTY(EditAnywhere, config, Category="Wire Routing", meta=(ClampMin="4.0", ClampMax="64.0"))
     float GridSize;
 
-    /** Extra cost added each time the route changes direction. Higher values prefer fewer bends. */
-    UPROPERTY(EditAnywhere, config, Category="Wire Routing", meta=(ClampMin="0.0"))
-    float TurnPenalty;
-
-    /** Extra cost when a wire segment overlaps an already-routed wire. Higher values prefer non-overlapping routes. */
-    UPROPERTY(EditAnywhere, config, Category="Wire Routing", meta=(ClampMin="0.0"))
-    float CrossingPenalty;
+    /** Radius of rounded corners on orthogonal wires, in screen pixels. 0 = sharp corners. */
+    UPROPERTY(EditAnywhere, config, Category="Wire Routing", meta=(ClampMin="0.0", ClampMax="20.0"))
+    float CornerRadius;
 
     /** Draw a small arc where wires cross, like a bridge in a circuit diagram. Works in both Bezier and orthogonal mode. */
     UPROPERTY(EditAnywhere, config, Category="Wire Bridges")

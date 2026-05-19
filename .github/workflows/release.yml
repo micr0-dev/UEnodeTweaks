@@ -1,0 +1,44 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Package plugin
+        run: |
+          TAG=${GITHUB_REF_NAME}
+          PLUGIN_NAME="UEnodeTweaks-${TAG}"
+          mkdir -p "dist/${PLUGIN_NAME}"
+          rsync -a \
+            --exclude='Intermediate/' \
+            --exclude='dist/' \
+            --exclude='.git/' \
+            . "dist/${PLUGIN_NAME}/"
+          cd dist
+          zip -r "${PLUGIN_NAME}.zip" "${PLUGIN_NAME}/"
+          echo "ASSET=dist/${PLUGIN_NAME}.zip" >> $GITHUB_ENV
+          echo "PLUGIN_NAME=${PLUGIN_NAME}" >> $GITHUB_ENV
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: ${{ env.PLUGIN_NAME }}
+          body: |
+            ## UE Node Tweaks ${{ github.ref_name }}
+
+            Drop the `UEnodeTweaks` folder into your project's `Plugins/` directory and enable the plugin in the editor.
+
+            Settings are in **Editor Preferences → Plugins → UE Node Tweaks**.
+          files: ${{ env.ASSET }}
+          fail_on_unmatched_files: true
