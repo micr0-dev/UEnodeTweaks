@@ -1,6 +1,7 @@
 #include "UEnodeTweaksModule.h"
 #include "MultiConnectPreprocessor.h"
 #include "MultiPinDragPreprocessor.h"
+#include "SmartArrangePreprocessor.h"
 #include "OrthogonalConnectionDrawingPolicy.h"
 #include "NodeTweaksSettings.h"
 #include "MathExpressionNode.h"
@@ -77,6 +78,9 @@ void FUEnodeTweaksModule::StartupModule()
         FSlateApplication::Get().RegisterInputPreProcessor(MultiConnectProcessor, 1);
     }
 
+    SmartArrangeProcessor = MakeShared<FSmartArrangePreprocessor>();
+    FSlateApplication::Get().RegisterInputPreProcessor(SmartArrangeProcessor, 0);
+
     ConnectionFactory = MakeShared<FOrthogonalConnectionFactory>();
     FEdGraphUtilities::RegisterVisualPinConnectionFactory(ConnectionFactory);
 
@@ -100,11 +104,14 @@ void FUEnodeTweaksModule::ShutdownModule()
 
     if (FSlateApplication::IsInitialized())
     {
+        if (SmartArrangeProcessor.IsValid())
+            FSlateApplication::Get().UnregisterInputPreProcessor(SmartArrangeProcessor);
         if (MultiConnectProcessor.IsValid())
             FSlateApplication::Get().UnregisterInputPreProcessor(MultiConnectProcessor);
         if (MultiPinDragProcessor.IsValid())
             FSlateApplication::Get().UnregisterInputPreProcessor(MultiPinDragProcessor);
     }
+    SmartArrangeProcessor.Reset();
     MultiConnectProcessor.Reset();
     MultiPinDragProcessor.Reset();
 }
